@@ -1,35 +1,77 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
+	"log"
+	"math/rand"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
-	"github.com/go-rod/stealth"
 )
 
 func main() {
-	wsURL := launcher.New().Leakless(false).Headless(false).MustLaunch()
-	browser := rod.New().ControlURL(wsURL).MustConnect()
-	page := stealth.MustPage(browser)
+	file, err := os.Open("data.csv")
+	if err != nil {
+		log.Panic(err)
+	}
+	defer file.Close()
+
+	// Create a new CSV reader
+	reader := csv.NewReader(file)
+	reader.Comma = '|'
+
+	// Read all the records from the CSV file
+	records, err := reader.ReadAll()
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	path, _ := launcher.LookPath()
+	u := launcher.New().Bin(path).Headless(true).MustLaunch()
+	page := rod.New().ControlURL(u).MustConnect().MustPage("")
+
+	for i, row := range records {
+		PageQuiz(page, row, i)
+	}
+
+}
+
+func PageQuiz(page *rod.Page, row []string, i int) {
+	dataQuiz1, err := stringsToInts(row[9:49])
+	if err != nil {
+		log.Fatal(err, i)
+	}
+	dataQuiz2, err := stringsToInts(row[49:79])
+	if err != nil {
+		log.Fatal(err, i)
+	}
+	dataResponden := row[:9]
 
 	page.MustNavigate("https://docs.google.com/forms/d/e/1FAIpQLSe3TPcju4fsYew5gLidWZefV0PqEmV5MVT_euWaKzmFyi46HQ/viewform")
 
-	Responden(page)
+	Responden(page, dataResponden)
 
-	page.MustElementX(`//*[@id="mG61Hd"]/div[2]/div/div[3]/div[1]/div[1]/div`).MustClick()
-
-	jawab := []int{3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}
-	Quiz(page, jawab)
+	Quiz(page, dataQuiz1)
 	Submit(page)
-	Quiz(page, jawab)
+	Quiz(page, dataQuiz2)
+	Submit(page)
+
+	fmt.Printf("Responden %s Telah mengisi\n", dataResponden[0])
+	rand.NewSource(time.Now().UnixNano())
+	randomNumber := time.Duration(rand.Intn(15) + 30)
+
+	time.Sleep(time.Second * randomNumber)
 }
 
 func Quiz(page *rod.Page, answer []int) {
 	page.MustWaitStable()
 	quiz := page.MustElements(`div.Od2TWd.hYsg7c`)
-	fmt.Println(len(quiz) / 3)
+
 	for i, d := range answer {
 		if d == 3 {
 			d = 1
@@ -44,24 +86,37 @@ func Quiz(page *rod.Page, answer []int) {
 
 }
 
-func Responden(page *rod.Page) {
+func Responden(page *rod.Page, data []string) {
+
+	jk, _ := strconv.Atoi(data[1])
+	jurusan, _ := strconv.Atoi(data[2])
+	angkatan, _ := strconv.Atoi(data[3])
+	online, _ := strconv.Atoi(data[4])
+	kegiatan, _ := strconv.Atoi(data[5])
+	uangsaku, _ := strconv.Atoi(data[6])
+	freq, _ := strconv.Atoi(data[7])
+
 	page.MustWaitStable()
+
 	textbox := page.MustElements(`input.whsOnd.zHQkBf`)
-	textbox[0].MustInput("Evan Roy")
+	textbox[0].MustInput(data[0])
 
 	radioBut := page.MustElements(`.Od2TWd.hYsg7c`)
-	radioBut[0].MustClick()
+	// Jenis Kelamin
+	radioBut[jk].MustClick()
 	sleepytime()
-	radioBut[2].MustClick()
+	radioBut[jurusan].MustClick()
 
-	radioBut[9].MustClick()
-	radioBut[12].MustClick()
-	radioBut[14].MustClick()
+	radioBut[angkatan].MustClick()
+	radioBut[online].MustClick()
 	sleepytime()
-	radioBut[17].MustClick()
-	radioBut[20].MustClick()
+	radioBut[kegiatan].MustClick()
+	radioBut[uangsaku].MustClick()
 	sleepytime()
-	textbox[1].MustInput("shopee")
+	radioBut[freq].MustClick()
+	textbox[1].MustInput(data[8])
+	sleepytime()
+	page.MustElementX(`//*[@id="mG61Hd"]/div[2]/div/div[3]/div[1]/div[1]/div`).MustClick()
 }
 
 func sleepytime() {
@@ -70,6 +125,18 @@ func sleepytime() {
 
 func Submit(page *rod.Page) {
 	page.MustElementX(`//*[@id="mG61Hd"]/div[2]/div/div[3]/div[1]/div[1]/div[2]`).MustClick()
-	//*[@id="mG61Hd"]/div[2]/div/div[3]/div[1]/div[1]/div[2]
+}
 
+func stringsToInts(strSlice []string) ([]int, error) {
+	intSlice := make([]int, len(strSlice))
+
+	for i, str := range strSlice {
+		num, err := strconv.Atoi(str)
+		if err != nil {
+			return nil, fmt.Errorf("error converting string '%s' to int: %v", str, err)
+		}
+		intSlice[i] = num
+	}
+
+	return intSlice, nil
 }
